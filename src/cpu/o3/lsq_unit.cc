@@ -1547,6 +1547,7 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
 
                 // Tell IQ/mem dep unit that this instruction will need to be
                 // rescheduled eventually
+                // This might be where we trigger the move to WIB
                 iewStage->rescheduleMemInst(load_inst);
                 load_inst->clearIssued();
                 load_inst->effAddrValid(false);
