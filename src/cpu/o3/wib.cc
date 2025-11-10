@@ -11,6 +11,7 @@
 #include "enums/OpClass.hh"
 #include "params/BaseO3CPU.hh"
 #include "sim/core.hh"
+#include "sim/probe/probe.hh"
 
 using std::list;
 
@@ -29,19 +30,41 @@ WIB::WIB(CPU *cpu_ptr, IEW *iew_ptr,
       totalWidth(params.issueWidth)
 
 {
+    const auto &reg_classes = params.isa[0]->regClasses();
+    // Set the number of total physical registers
+    // As the vector registers have two addressing modes, they are added twice
+    numPhysRegs = params.numPhysIntRegs + params.numPhysFloatRegs +
+                    params.numPhysVecRegs +
+                    params.numPhysVecRegs * (
+                            reg_classes.at(VecElemClass).numRegs() /
+                            reg_classes.at(VecRegClass).numRegs()) +
+                    params.numPhysVecPredRegs +
+                    params.numPhysCCRegs;
 
-
+    //Create an entry for each physical register within the
+    //dependency graph.
+    dependGraph.resize(numPhysRegs);
 }   
 
-    WIB::~WIB()
-    {
-        dependGraph.reset();
-    }
+WIB::~WIB()
+{
+    dependGraph.reset();
+}
 
-    std::string WIB::name() const
-    {
-        return cpu->name() + ".wib";
-    }
+void WIB::regProbePoints()
+{
+    /**
+     * Probe point with dynamic instruction as the argument used to probe when
+     * an instruction execution completes and it is marked ready to commit.
+     */
+    ppToCommit = new ProbePointArg<DynInstPtr>(
+        cpu->getProbeManager(), "ToCommit");
+}
+
+std::string WIB::name() const
+{
+    return cpu->name() + ".wib";
+}
 
 
 

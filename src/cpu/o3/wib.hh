@@ -7,6 +7,7 @@
 
 // gem5 includes
 #include "cpu/o3/dyn_inst_ptr.hh"
+#include "sim/probe/probe.hh"
 
 
 namespace gem5
@@ -29,11 +30,19 @@ class WIB
     /** Destructs a WIB. */
     ~WIB();
 
+
+    /** Registers probes. */
+    void regProbePoints();
+
+    /** Removes instructions from Issue Queue */
+    void removeInstsFromIQ(const DynInstPtr &waiting_inst);
+    
+    /** Adds instructions to Issue Queue */
+    void addInstsToIQ(const DynInstPtr &ready_inst);
+
+
     /** Returns the name of the IQ. */
     std::string name() const;
-
-
-
 
 
   private:
@@ -42,6 +51,9 @@ class WIB
 
     /** Pointer to IEW stage. */
     IEW *iewStage;
+
+    /** To probe when instruction execution is complete. */
+    ProbePointArg<DynInstPtr> *ppToCommit;
 
     //////////////////////////////////////
     // Instruction lists, ready queues, and ordering
@@ -68,6 +80,9 @@ class WIB
     /** The total number of instructions that can be issued in one cycle. */
     unsigned totalWidth;
 
+    /** The number of physical registers in the CPU. */
+    unsigned numPhysRegs;
+
     DependencyGraph<DynInstPtr> dependGraph;
 
 
@@ -78,9 +93,7 @@ class WIB
         /** Stat for number of instructions added. */
         statistics::Scalar instsAdded;
 
-    } wibStats;
-
-    struct 
+    } wibStats; 
 };
 } // namespace o3
 } // namespace gem5
