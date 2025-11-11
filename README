@@ -1,3 +1,6 @@
+This repo contains the necessary modifications for implementing a Waiting Instruction Buffer (WIB) from the following paper: https://ieeexplore.ieee.org/document/1003562 
+
+-------------------------- from class README ----------------------------------
 This is the gem5 simulator.
 
 The main website can be found at http://www.gem5.org
