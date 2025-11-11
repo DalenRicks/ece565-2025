@@ -1320,6 +1320,9 @@ LSQUnit::read(LSQRequest *request, ssize_t load_idx)
     LQEntry& load_entry = loadQueue[load_idx];
     const DynInstPtr& load_inst = load_entry.instruction();
 
+    // Potential WIB trigger: detect load miss here to signal dependent instructions to move into WIB
+
+
     load_entry.setRequest(request);
     assert(load_inst);
 

@@ -755,6 +755,9 @@ InstructionQueue::scheduleReadyInsts()
 
     IssueStruct *i2e_info = issueToExecuteQueue->access(0);
 
+// WIB reinsertion candidate: once load miss resolves, reinsert dependent insts here before normal scheduling
+
+
     DynInstPtr mem_inst;
     while ((mem_inst = getDeferredMemInstToExecute())) {
         addReadyMemInst(mem_inst);
