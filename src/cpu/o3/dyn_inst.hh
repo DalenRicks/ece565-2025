@@ -169,7 +169,8 @@ class DynInst : public ExecContext, public RefCounted
         SerializeAfter,          /// Needs to serialize instructions behind it
         SerializeHandled,        /// Serialization has been handled
         NumStatus,
-        WaitToIssue              /// Instruction is ready to move to the WIB
+        WaitToIssue,             /// Instruction is ready to move to the WIB
+        Waiting                  /// Instruction is waiting in the WIB    
     };
 
     enum Flags
@@ -748,6 +749,24 @@ class DynInst : public ExecContext, public RefCounted
 
     /** Clears this instruction being able to issue. */
     void clearCanIssue() { status.reset(CanIssue); }
+
+    /** Sets this instruction as ready to issue. */
+    void setWaitToIssue() { status.set(WaitToIssue); }
+
+    /** Returns whether or not this instruction is ready to issue. */
+    bool waitToIssue() const { return status[WaitToIssue]; }
+
+    /** Clears this instruction being able to issue. */
+    void clearwaitToIssue() { status.reset(WaitToIssue); }
+
+    /** Sets this instruction as ready to issue. */
+    void setWaiting() { status.set(Waiting); }
+
+    /** Returns whether or not this instruction is ready to issue. */
+    bool waiting() const { return status[Waiting]; }
+
+    /** Clears this instruction being able to issue. */
+    void clearWaiting() { status.reset(Waiting); }
 
     /** Sets this instruction as issued from the IQ. */
     void setIssued() { status.set(Issued); }

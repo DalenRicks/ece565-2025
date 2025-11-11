@@ -11,16 +11,17 @@
 // gem5 includes
 #include "base/statistics.hh"
 #include "base/types.hh"
-#include "cpu/o3/dyn_inst_ptr.hh"
 #include "cpu/inst_seq.hh"
+#include "cpu/op_class.hh"
+#include "cpu/timebuf.hh"
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/dep_graph.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
+#include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/limits.hh"
+#include "cpu/o3/lsq.hh"
 #include "cpu/o3/mem_dep_unit.hh"
 #include "cpu/o3/store_set.hh"
-#include "cpu/op_class.hh"
-#include "cpu/timebuf.hh"
 #include "enums/SMTQueuePolicy.hh"
 #include "sim/eventq.hh"
 #include "sim/probe/probe.hh"
@@ -67,8 +68,11 @@ class WIB
     /** Pointer to the CPU. */
     CPU *cpu;
 
-    /** Pointer to IEW stage. */
-    IEW *iewStage;
+    /** Instruction queue. */
+    InstructionQueue instQueue;
+
+    /** Load / store queue. */
+    LSQ ldstQueue;
 
     /** To probe when instruction execution is complete. */
     ProbePointArg<DynInstPtr> *ppToCommit;

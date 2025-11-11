@@ -197,6 +197,11 @@ class InstructionQueue
      */
     DynInstPtr getInstToExecute();
 
+    /** Returns the oldest scheduled instruction, and removes it from
+     * the list of instructions waiting to be moved to the WIB.
+     */
+    DynInstPtr getInstToWIB();
+
     /** Gets a memory instruction that was referred due to a delayed DTB
      *  translation if it is now ready to execute.  NULL if none available.
      */
@@ -322,6 +327,9 @@ class InstructionQueue
 
     /** List of instructions that are ready to be executed. */
     std::list<DynInstPtr> instsToExecute;
+
+    /** List of instructions that are ready to be moved to the WIB. */
+    std::list<DynInstPtr> instsToWIB;
 
     /** List of instructions waiting for their DTB translation to
      *  complete (hw page table walk in progress).

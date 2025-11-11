@@ -25,7 +25,8 @@ namespace o3
 WIB::WIB(CPU *cpu_ptr, IEW *iew_ptr,
     const BaseO3CPUParams &params)
     : cpu(cpu_ptr),
-      iewStage(iew_ptr),
+      instQueue(cpu_ptr, iew_ptr, params),
+      ldstQueue(cpu_ptr, iew_ptr, params),
 	  numEntries(params.numWIBEntries),
       totalWidth(params.issueWidth),
       wibStats(cpu, totalWidth)
@@ -73,6 +74,29 @@ void WIB::regProbePoints()
      */
     ppToCommit = new ProbePointArg<DynInstPtr>(
         cpu->getProbeManager(), "ToCommit");
+}
+
+void WIB::removeInstsFromIQ(const DynInstPtr &waiting_inst)
+{
+    
+    /* Add for loop that pulls all available instructions from the ready to move to wib list in Issue Queue*/
+
+    // Pull the instruction from the issue queue
+    DynInstPtr inst = instQueue.getInstToWIB();
+
+    while (inst) {
+        // DPRINTF(IQ, "Removing instruction [sn:%llu] PC %s from IQ to WIB.\n",
+        //         inst->seqNum, inst->pcState());
+
+        // Add the instruction to the WIB's instruction list
+        instList[inst->thread->threadId()].push_back(inst);
+
+        // Get the next instruction from the issue queue
+        inst = instQueue.getInstToWIB();
+
+        wibStats.instsAdded++;
+    }
+
 }
 
 int WIB::wakeDependents(const DynInstPtr &completed_inst)

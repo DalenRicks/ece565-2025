@@ -453,6 +453,7 @@ InstructionQueue::isDrained() const
 {
     bool drained = dependGraph.empty() &&
                    instsToExecute.empty() &&
+                   instsToWIB.empty() &&
                    wbOutstanding == 0;
     for (ThreadID tid = 0; tid < numThreads; ++tid)
         drained = drained && memDepUnit[tid].isDrained();
@@ -465,6 +466,7 @@ InstructionQueue::drainSanityCheck() const
 {
     assert(dependGraph.empty());
     assert(instsToExecute.empty());
+    assert(instsToWIB.empty());
     for (ThreadID tid = 0; tid < numThreads; ++tid)
         memDepUnit[tid].drainSanityCheck();
 }
@@ -673,6 +675,15 @@ InstructionQueue::getInstToExecute()
     return inst;
 }
 
+DynInstPtr
+InstructionQueue::getInstToWIB()
+{
+    assert(!instsToWIB.empty());
+    DynInstPtr inst = std::move(instsToWIB.front());
+    instsToWIB.pop_front();
+    return inst;
+}
+
 void
 InstructionQueue::addToOrderList(OpClass op_class)
 {
@@ -830,6 +841,33 @@ InstructionQueue::scheduleReadyInsts()
             if (idx > FUPool::NoFreeFU) {
                 op_latency = fuPool->getOpLatency(op_class);
             }
+        }
+
+        // Check if the instruction is marked to move to the WIB
+        if (issuing_inst->waitToIssue()) {
+            // Remove from ready queue
+            readyInsts[op_class].pop();
+
+            if (!readyInsts[op_class].empty()) {
+                moveToYoungerInst(order_it);
+            } else {
+                readyIt[op_class] = listOrder.end();
+                queueOnList[op_class] = false;
+            }
+
+            listOrder.erase(order_it++);
+
+            // Add to the instsToWIB queue
+            instsToWIB.push_back(issuing_inst);
+
+            DPRINTF(IQ, "Thread %i: Moving instruction PC %s "
+                    "[sn:%llu] to WIB\n",
+                    tid, issuing_inst->pcState(),
+                    issuing_inst->seqNum);
+
+            issuing_inst->setWaiting();
+            ++total_issued;
+        
         }
 
         // If we have an instruction that doesn't require a FU, or a
@@ -1451,6 +1489,28 @@ InstructionQueue::addIfReady(const DynInstPtr &inst)
             addToOrderList(op_class);
         }
     }
+
+    /** alternative option to adding instructions to the WIB queue */
+    // if (inst->waitToIssue()){
+    //     OpClass op_class = inst->opClass();
+
+    //     DPRINTF(IQ, "Instruction is dependent on a load miss, putting"
+    //             "it into the WIB, PC %s opclass:%i [sn:%llu].\n",
+    //             inst->pcState(), op_class, inst->seqNum);
+
+    //     instsToWIB[op_class].push(inst);
+
+    //     // Will need to reorder the list if either a queue is not on the list,
+    //     // or it has an older instruction than last time.
+    //     if (!queueOnList[op_class]) {
+    //         addToOrderList(op_class);
+    //     } else if (instsToWIB[op_class].top()->seqNum  <
+    //                (*readyIt[op_class]).oldestInst) {
+    //         listOrder.erase(readyIt[op_class]);
+    //         addToOrderList(op_class);
+    //     }
+
+    // }
 }
 
 int
