@@ -1400,6 +1400,8 @@ IEW::writebackInsts()
         // instruction.
         ppToCommit->notify(inst);
 
+        /** Figure how how to hook into this notify signal OR directly call the WIB::wakeDependents() function */
+
         // Some instructions will be sent to commit without having
         // executed because they need commit to handle them.
         // E.g. Strictly ordered loads have not actually executed when they

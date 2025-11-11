@@ -2,11 +2,27 @@
 #define __CPU_O3_WIB_HH__
 
 // Standard c++ includes
+#include <list>
 #include <vector>
+#include <map>
+#include <queue>
 #include <string>
 
 // gem5 includes
+#include "base/statistics.hh"
+#include "base/types.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
+#include "cpu/inst_seq.hh"
+#include "cpu/o3/comm.hh"
+#include "cpu/o3/dep_graph.hh"
+#include "cpu/o3/dyn_inst_ptr.hh"
+#include "cpu/o3/limits.hh"
+#include "cpu/o3/mem_dep_unit.hh"
+#include "cpu/o3/store_set.hh"
+#include "cpu/op_class.hh"
+#include "cpu/timebuf.hh"
+#include "enums/SMTQueuePolicy.hh"
+#include "sim/eventq.hh"
 #include "sim/probe/probe.hh"
 
 
@@ -30,6 +46,8 @@ class WIB
     /** Destructs a WIB. */
     ~WIB();
 
+    /** Returns the name of the IQ. */
+    std::string name() const;
 
     /** Registers probes. */
     void regProbePoints();
@@ -40,9 +58,9 @@ class WIB
     /** Adds instructions to Issue Queue */
     void addInstsToIQ(const DynInstPtr &ready_inst);
 
+    /** Wakes all dependents of a completed instruction. */
+    int wakeDependents(const DynInstPtr &completed_inst);
 
-    /** Returns the name of the IQ. */
-    std::string name() const;
 
 
   private:

@@ -168,7 +168,8 @@ class DynInst : public ExecContext, public RefCounted
                                  /// instructions ahead of it
         SerializeAfter,          /// Needs to serialize instructions behind it
         SerializeHandled,        /// Serialization has been handled
-        NumStatus
+        NumStatus,
+        WaitToIssue              /// Instruction is ready to move to the WIB
     };
 
     enum Flags
