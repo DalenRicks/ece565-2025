@@ -61,6 +61,12 @@ class WIB
 
     /** Wakes all dependents of a completed instruction. */
     int wakeDependents(const DynInstPtr &completed_inst);
+    
+    /** Adds a dependency between a normal instruction and a long instruction in the dependency graph. */
+    bool addLongDependency(const DynInstPtr &new_inst);
+
+    /** Adds a long instruction as a producer in the dependency graph. */
+    void addLongProducer(const DynInstPtr &long_inst);
 
 
 

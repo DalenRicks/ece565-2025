@@ -169,5 +169,99 @@ int WIB::wakeDependents(const DynInstPtr &completed_inst)
 }
 
 
+bool WIB::addLongDependency(const DynInstPtr &new_inst)
+{
+    // Loop through the instruction's source registers, adding
+    // them to the dependency list if they are not ready.
+    int8_t total_src_regs = new_inst->numSrcRegs();
+    bool return_val = false;
+
+    for (int src_reg_idx = 0;
+         src_reg_idx < total_src_regs;
+         src_reg_idx++)
+    {
+        
+        // Only add it to the dependency graph if it's not ready.
+        if (!new_inst->readySrcIdx(src_reg_idx)) {
+            PhysRegIdPtr src_reg = new_inst->renamedSrcIdx(src_reg_idx);
+
+            /* Since we only want to track dependency on long instructions, we only care about the tracking 
+            the source register if it is sourced by a long instruction. Otherwise, we can skip to the next 
+            source register.     
+            */
+
+            if (!dependGraph.empty(src_reg->flatIndex())) {
+                continue;
+            }
+
+            dependGraph.insert(src_reg->flatIndex(), new_inst);
+            return_val = true;
+            
+            // Could potentially track how many instructions were linked using the WIBStats class
+
+
+            /* Note: These checks were intentially left out since they were already run in the issue queue.
+                The only reason that they would be in this function is in the case that the Issue Queue determined that
+                it is a long running instruction. So, unlike the Issue Queue counterpart, this function operates under 
+                the assumption that the instruction will not become ready in flight between stages. Additionally, we want
+                to link the link the instructions using the physical register, regardless of whether it is a fixed mapping*/
+
+            // Check the IQ's scoreboard to make sure the register
+            // hasn't become ready while the instruction was in flight
+            // between stages.  Only if it really isn't ready should
+            // it be added to the dependency graph.
+            // if (src_reg->isFixedMapping()) {
+            //     continue;               
+            // } else if (!regScoreboard[src_reg->flatIndex()]) {
+            //     DPRINTF(IQ, "Instruction PC %s has src reg %i (%s) that "
+            //             "is being added to the dependency chain.\n",
+            //             new_inst->pcState(), src_reg->index(),
+            //             src_reg->className());
+
+            //     dependGraph.insert(src_reg->flatIndex(), new_inst);
+
+            //     // Change the return value to indicate that something
+            //     // was added to the dependency graph.
+            //     return_val = true;
+            // } else {
+            //     DPRINTF(IQ, "Instruction PC %s has src reg %i (%s) that "
+            //             "became ready before it reached the IQ.\n",
+            //             new_inst->pcState(), src_reg->index(),
+            //             src_reg->className());
+            //     // Mark a register ready within the instruction.
+            //     new_inst->markSrcRegReady(src_reg_idx);
+            // }
+        }
+    }
+
+    return return_val;
+}
+
+void WIB::addLongProducer(const DynInstPtr &long_inst)
+{
+    // Nothing really needs to be marked when an instruction becomes
+    // the producer of a register's value, but for convenience a ptr
+    // to the producing instruction will be placed in the head node of
+    // the dependency links.
+    int8_t total_dest_regs = long_inst->numDestRegs();
+
+    for (int dest_reg_idx = 0;
+         dest_reg_idx < total_dest_regs;
+         dest_reg_idx++)
+    {
+        PhysRegIdPtr dest_reg = long_inst->renamedDestIdx(dest_reg_idx);
+
+        if (!dependGraph.empty(dest_reg->flatIndex())) {
+            dependGraph.dump();
+            panic("Dependency graph %i (%s) (flat: %i) not empty!",
+                  dest_reg->index(), dest_reg->className(),
+                  dest_reg->flatIndex());
+        }
+
+        dependGraph.setInst(dest_reg->flatIndex(), long_inst);
+    }
+}
+
+
 } // namespace o3
 } // namespace gem5
