@@ -76,6 +76,10 @@ void WIB::regProbePoints()
         cpu->getProbeManager(), "ToCommit");
 }
 
+/* Maybe when you remove the instruction from the issue queue, you should say what its dependency is as well
+    Either that, or in the issue queue, you should look for the dependency chain in the issue queue and just use this
+    function purely as a vehicle to move the instructions from one place to the other
+*/
 void WIB::removeInstsFromIQ(const DynInstPtr &waiting_inst)
 {
     
@@ -168,7 +172,26 @@ int WIB::wakeDependents(const DynInstPtr &completed_inst)
     return dependents;
 }
 
+/*  When we move dependency chains from the issue queue to the wib, we dont necesarially care
+    what the *exact* dependency chain is, rather we care about what long instruction the dependency chain stems from.
+    So it might be more effective to link all instructions in a dependency chain to the single load instruction,
+    even though they might not be directly dependent on it. That way when the load is completed, all of the instructions
+    dependent (directly or indirectly) will be marked to be moved back into the issue queue
+    
+    
+    For example, if the following dependency chain exists in the issue queue:
+    load p1 4(r2)   load
+    add p3 p1 p2    add -> load
+    sub p5 p4 p3    sub -> add
 
+    the dependency chain would be rewritten to the following in the WIB:
+    load p1 4(r2)   load
+    add p3 p1 p2    add -> load
+    sub p5 p4 p3    sub -> load
+
+    This might mean that another function will need to be made that will assign the dependency chain to load and this function
+    handles the details on how the assigning occurs.
+    */
 bool WIB::addLongDependency(const DynInstPtr &new_inst)
 {
     // Loop through the instruction's source registers, adding
