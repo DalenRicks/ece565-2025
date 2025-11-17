@@ -791,6 +791,8 @@ InstructionQueue::scheduleReadyInsts()
     ListOrderIt order_it = listOrder.begin();
     ListOrderIt order_end_it = listOrder.end();
 
+    // TODO: Figure out what listOrder is
+
     while (total_issued < totalWidth && order_it != order_end_it) {
         OpClass op_class = (*order_it).queueType;
 
@@ -844,6 +846,10 @@ InstructionQueue::scheduleReadyInsts()
         }
 
         // Check if the instruction is marked to move to the WIB
+        /* Note:
+            I believe this will only work if the WIB-bound instructions are placed in the 
+            readyInsts list
+        */
         if (issuing_inst->waitToIssue()) {
             // Remove from ready queue
             readyInsts[op_class].pop();
@@ -1074,7 +1080,10 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
         //Go through the dependency chain, marking the registers as
         //ready within the waiting instructions.
         DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
+        
 
+        /* Note: Look here for inspiration for linking and interacting with
+        dependency graph instructions and the dependency chain*/
         while (dep_inst) {
             DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
                     "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
@@ -1385,6 +1394,8 @@ InstructionQueue::addToDependents(const DynInstPtr &new_inst)
         // Only add it to the dependency graph if it's not ready.
         if (!new_inst->readySrcIdx(src_reg_idx)) {
             PhysRegIdPtr src_reg = new_inst->renamedSrcIdx(src_reg_idx);
+            
+            /* Also look here for how dependency graph stuff*/
 
             // Check the IQ's scoreboard to make sure the register
             // hasn't become ready while the instruction was in flight
@@ -1426,6 +1437,8 @@ InstructionQueue::addToProducers(const DynInstPtr &new_inst)
     // the dependency links.
     int8_t total_dest_regs = new_inst->numDestRegs();
 
+
+    // And look here for dependency graph stuff
     for (int dest_reg_idx = 0;
          dest_reg_idx < total_dest_regs;
          dest_reg_idx++)
@@ -1489,6 +1502,12 @@ InstructionQueue::addIfReady(const DynInstPtr &inst)
             addToOrderList(op_class);
         }
     }
+
+    /* Notes:
+
+        It looks like that the 'fake ready' instructions that need to be moved to the issue
+        queue need to be moved to the readyInsts queue to be scheduled properly in scheduleReadyInsts().
+    */
 
     /** alternative option to adding instructions to the WIB queue */
     // if (inst->waitToIssue()){
