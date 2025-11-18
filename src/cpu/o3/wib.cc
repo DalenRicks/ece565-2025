@@ -8,6 +8,7 @@
 #include "cpu/o3/fu_pool.hh"
 #include "cpu/o3/limits.hh"
 #include "debug/IQ.hh"
+#include "debug/WIB.hh"   // trace for WIB flow
 #include "enums/OpClass.hh"
 #include "params/BaseO3CPU.hh"
 #include "sim/core.hh"
@@ -168,6 +169,22 @@ int WIB::wakeDependents(const DynInstPtr &completed_inst)
     return dependents;
 }
 
+void
+WIB::onLoadComplete(RegIndex preg)
+{
+    DPRINTF(WIB, "onLoadComplete: reg %d ready\n", preg);
+
+    // For now, just poke the local ready list so we can see the path light up.
+    if (!instsToExecute.empty()) {
+        auto inst = instsToExecute.front();
+        instsToExecute.pop_front();
+        DPRINTF(WIB, "reinsert candidate: sn=%llu (reg %d)\n",
+                inst->seqNum, preg);
+        // Real reinsertion will happen via IEW hook once Dalen's dep graph is wired.
+    } else {
+        DPRINTF(WIB, "no waiters for reg %d (stub)\n", preg);
+    }
+}
 
 } // namespace o3
 } // namespace gem5

@@ -830,6 +830,9 @@ IEW::deactivateStage()
 void
 IEW::dispatch(ThreadID tid)
 {
+    // quick WIB peek before normal dispatch
+    checkWIB(tid);
+
     // If status is Running or idle,
     //     call dispatchInsts()
     // If status is Unblocking,
@@ -1109,6 +1112,32 @@ IEW::dispatchInsts(ThreadID tid)
     }
 
     dis_num_inst = 0;
+}
+
+// WIB reinsertin hook 
+void
+IEW::checkWIB(ThreadID tid)
+{
+    int pulled = 0;
+
+    //peek at WIB for ready instructions.
+    while (wib.hasReady() && pulled < 2) {
+        auto inst = wib.popReady();
+        if (!inst)
+            break;
+
+        DPRINTF(WIB, "[tid:%i] pulling inst from WIB: [sn:%llu]\n",
+                tid, inst->seqNum);
+
+        // Reinsert into IQ once the API is finalized.
+        // instQueue.insert(inst);
+
+        pulled++;
+    }
+
+    if (pulled)
+        DPRINTF(WIB, "[tid:%i] %d instruction(s) reinserted from WIB\n",
+                tid, pulled);
 }
 
 void

@@ -261,6 +261,9 @@ class IEW
     /** Dispatches instructions to IQ and LSQ. */
     void dispatchInsts(ThreadID tid);
 
+     // small helper to grab ready insts from WIB (temp, just for testing)
+    void checkWIB(ThreadID tid);
+
     /** Executes instructions. In the case of memory operations, it informs the
      * LSQ to execute the instructions. Also handles any redirects that occur
      * due to the executed instructions.

@@ -62,7 +62,8 @@ class WIB
     /** Wakes all dependents of a completed instruction. */
     int wakeDependents(const DynInstPtr &completed_inst);
 
-
+    // load finished; time to nudge any waiters tied to this phys reg
+    void onLoadComplete(RegIndex preg);
 
   private:
     /** Pointer to the CPU. */
