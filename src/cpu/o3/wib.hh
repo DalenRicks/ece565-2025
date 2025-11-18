@@ -53,8 +53,8 @@ class WIB
     /** Registers probes. */
     void regProbePoints();
 
-    /** Removes instructions from Issue Queue */
-    void removeInstsFromIQ(const DynInstPtr &waiting_inst);
+    /** Adds instructions to WIB */
+    void insertInWIB(const DynInstPtr &new_inst);
     
     /** Adds instructions to Issue Queue */
     void addInstsToIQ(const DynInstPtr &ready_inst);
@@ -82,6 +82,7 @@ class WIB
 
     /** To probe when instruction execution is complete. */
     ProbePointArg<DynInstPtr> *ppToCommit;
+    
 
     //////////////////////////////////////
     // Instruction lists, ready queues, and ordering
@@ -102,6 +103,9 @@ class WIB
     // Various parameters
     //////////////////////////////////////
 
+    /** Number of free IQ entries left. */
+    unsigned freeEntries;
+
     /** The number of entries in the instruction queue. */
     unsigned numEntries;
 
@@ -113,6 +117,11 @@ class WIB
 
     DependencyGraph<DynInstPtr> dependGraph;
 
+    /** Debugging function to count how many entries are in the IQ.  It does
+     *  a linear walk through the instructions, so do not call this function
+     *  during normal execution.
+     */
+    int countInsts();
 
     struct WIBStats : public statistics::Group
     {

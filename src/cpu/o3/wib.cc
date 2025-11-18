@@ -7,7 +7,7 @@
 #include "cpu/o3/dyn_inst.hh"
 #include "cpu/o3/fu_pool.hh"
 #include "cpu/o3/limits.hh"
-#include "debug/IQ.hh"
+#include "debug/IQ.hh"      // I have a feeling that this include will cause issues later. Find out how to make a WIB version or whether it is necessary
 #include "enums/OpClass.hh"
 #include "params/BaseO3CPU.hh"
 #include "sim/core.hh"
@@ -80,27 +80,43 @@ void WIB::regProbePoints()
     Either that, or in the issue queue, you should look for the dependency chain in the issue queue and just use this
     function purely as a vehicle to move the instructions from one place to the other
 */
-void WIB::removeInstsFromIQ(const DynInstPtr &waiting_inst)
+void WIB::insertInWIB(const DynInstPtr &new_inst)
 {
+    // Make sure the instruction is valid
+    assert(new_inst);
+
+    DPRINTF(WIB, "Adding instruction [sn:%llu] PC %s to the WIB.\n",
+            new_inst->seqNum, new_inst->pcState());
+
+    assert(freeEntries != 0);
+
+    instList[new_inst->threadNumber].push_back(new_inst);
+
+    --freeEntries;
+
+    new_inst->setWaiting();
+
+    // Look through its source registers (physical regs), and mark any
+    // dependencies.
+    addLongDependency(new_inst);
+
+    // Have this instruction set itself as the producer of its destination
+    // register(s).
+    addLongProducer(new_inst);
+
+    // if (new_inst->isMemRef()) {
+    //     memDepUnit[new_inst->threadNumber].insert(new_inst);
+    // } else {
+    //     // Will probably be necessary
+    //     addIfReady(new_inst);
+    // }
+
+    ++wibStats.instsAdded;
     
-    /* Add for loop that pulls all available instructions from the ready to move to wib list in Issue Queue*/
+    // For tracking the number of instructions per thread. Might be helpful
+    // count[new_inst->threadNumber]++;
 
-    // Pull the instruction from the issue queue
-    DynInstPtr inst = instQueue.getInstToWIB();
-
-    while (inst) {
-        // DPRINTF(IQ, "Removing instruction [sn:%llu] PC %s from IQ to WIB.\n",
-        //         inst->seqNum, inst->pcState());
-
-        // Add the instruction to the WIB's instruction list
-        instList[inst->thread->threadId()].push_back(inst);
-
-        // Get the next instruction from the issue queue
-        inst = instQueue.getInstToWIB();
-
-        wibStats.instsAdded++;
-    }
-
+    assert(freeEntries == (numEntries - countInsts()));
 }
 
 int WIB::wakeDependents(const DynInstPtr &completed_inst)
@@ -283,6 +299,12 @@ void WIB::addLongProducer(const DynInstPtr &long_inst)
 
         dependGraph.setInst(dest_reg->flatIndex(), long_inst);
     }
+}
+
+int
+InstructionQueue::countInsts()
+{
+    return numEntries - freeEntries;
 }
 
 
