@@ -6,6 +6,7 @@
 #include "base/logging.hh"
 #include "cpu/o3/dyn_inst.hh"
 #include "cpu/o3/fu_pool.hh"
+#include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/limits.hh"
 #include "debug/IQ.hh"      // I have a feeling that this include will cause issues later. Find out how to make a WIB version or whether it is necessary
 #include "enums/OpClass.hh"
@@ -22,10 +23,10 @@ namespace o3
 
 
 
-WIB::WIB(CPU *cpu_ptr, IEW *iew_ptr,
+WIB::WIB(CPU *cpu_ptr, IEW *iew_ptr, InstructionQueue *iq_ptr,
     const BaseO3CPUParams &params)
     : cpu(cpu_ptr),
-      instQueue(cpu_ptr, iew_ptr, params),
+      instQueue(iq_ptr),
       ldstQueue(cpu_ptr, iew_ptr, params),
 	  numEntries(params.numWIBEntries),
       totalWidth(params.issueWidth),
@@ -85,8 +86,8 @@ void WIB::insertInWIB(const DynInstPtr &new_inst)
     // Make sure the instruction is valid
     assert(new_inst);
 
-    DPRINTF(WIB, "Adding instruction [sn:%llu] PC %s to the WIB.\n",
-            new_inst->seqNum, new_inst->pcState());
+    // DPRINTF(WIB, "Adding instruction [sn:%llu] PC %s to the WIB.\n",
+    //         new_inst->seqNum, new_inst->pcState());
 
     assert(freeEntries != 0);
 
@@ -118,6 +119,7 @@ void WIB::insertInWIB(const DynInstPtr &new_inst)
 
     assert(freeEntries == (numEntries - countInsts()));
 }
+
 
 int WIB::wakeDependents(const DynInstPtr &completed_inst)
 {
@@ -302,7 +304,7 @@ void WIB::addLongProducer(const DynInstPtr &long_inst)
 }
 
 int
-InstructionQueue::countInsts()
+WIB::countInsts()
 {
     return numEntries - freeEntries;
 }

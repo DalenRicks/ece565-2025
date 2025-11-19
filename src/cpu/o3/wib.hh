@@ -17,7 +17,6 @@
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/dep_graph.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
-#include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/limits.hh"
 #include "cpu/o3/lsq.hh"
 #include "cpu/o3/mem_dep_unit.hh"
@@ -35,12 +34,13 @@ namespace o3
 class FUPool;
 class CPU;
 class IEW;
+class InstructionQueue;
 
 class WIB
 {
   public:
     /** Constructs a WIB. */
-    WIB(CPU *cpu_ptr, IEW *iew_ptr,
+    WIB(CPU *cpu_ptr, IEW *iew_ptr, InstructionQueue *iq_ptr,
         const BaseO3CPUParams &params);
 
 
@@ -75,7 +75,7 @@ class WIB
     CPU *cpu;
 
     /** Instruction queue. */
-    InstructionQueue instQueue;
+    InstructionQueue *instQueue;  // Not 100% sure this is necessary yet but being proactive
 
     /** Load / store queue. */
     LSQ ldstQueue;

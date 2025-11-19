@@ -54,6 +54,7 @@
 #include "cpu/o3/dep_graph.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
 #include "cpu/o3/limits.hh"
+#include "cpu/o3/wib.hh"
 #include "cpu/o3/mem_dep_unit.hh"
 #include "cpu/o3/store_set.hh"
 #include "cpu/op_class.hh"
@@ -197,10 +198,10 @@ class InstructionQueue
      */
     DynInstPtr getInstToExecute();
 
-    /** Returns the oldest scheduled instruction, and removes it from
-     * the list of instructions waiting to be moved to the WIB.
-     */
-    DynInstPtr getInstToWIB();
+    /** Moves all dependents of a long instruction to the WIB 
+     * @param resched_inst The instruction whose dependents are to be moved
+    */
+    void moveDependentsToWIB(const DynInstPtr &long_inst);
 
     /** Gets a memory instruction that was referred due to a delayed DTB
      *  translation if it is now ready to execute.  NULL if none available.
@@ -282,6 +283,8 @@ class InstructionQueue
     /** Debug function to print all instructions. */
     void printInsts();
 
+    
+
   private:
     /** Does the actual squashing. */
     void doSquash(ThreadID tid);
@@ -298,6 +301,9 @@ class InstructionQueue
 
     /** Pointer to IEW stage. */
     IEW *iewStage;
+
+    /** Pointer to the WIB. */
+    WIB wib;
 
     /** The memory dependence unit, which tracks/predicts memory dependences
      *  between instructions.
