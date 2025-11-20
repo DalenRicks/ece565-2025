@@ -121,6 +121,56 @@ void WIB::insertInWIB(const DynInstPtr &new_inst)
     assert(freeEntries == (numEntries - countInsts()));
 }
 
+void
+WIB::removeFromWIB(const DynInstPtr &long_inst)
+{
+    int dependents = 0;
+    
+    for (int dest_reg_idx = 0;
+         dest_reg_idx < long_inst->numDestRegs();
+         dest_reg_idx++)
+    {
+        PhysRegIdPtr dest_reg =
+            long_inst->renamedDestIdx(dest_reg_idx);
+
+        // Special case of uniq or control registers.  They are not
+        // handled by the IQ and thus have no dependency graph entry.
+        if (dest_reg->isFixedMapping()) {
+            DPRINTF(IQ, "Reg %d [%s] is part of a fix mapping, skipping\n",
+                    dest_reg->index(), dest_reg->className());
+            continue;
+        }
+
+        DPRINTF(IQ, "Moving any dependents on register %i (%s).\n",
+                dest_reg->index(),
+                dest_reg->className());
+
+        //Go through the dependency chain, marking the registers as
+        //in WIB within the waiting instructions.
+        DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
+        
+        while (dep_inst) {
+            DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
+                    "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
+
+            // Mark the instruciton as in the WIB (not needed since its done in WIB)
+            dep_inst->setWaiting();
+            
+            // Move to WIB
+            instQueue->insert(dep_inst);
+
+            dep_inst = dependGraph.pop(dest_reg->flatIndex());
+
+            ++dependents;
+        }
+
+        // Reset the head node now that all of its dependents have
+        // been moved.
+        assert(dependGraph.empty(dest_reg->flatIndex()));
+        dependGraph.clearInst(dest_reg->flatIndex());
+    }
+}
+
 
 int WIB::wakeDependents(const DynInstPtr &completed_inst)
 {
@@ -238,41 +288,7 @@ bool WIB::addLongDependency(const DynInstPtr &new_inst)
 
             dependGraph.insert(src_reg->flatIndex(), new_inst);
             return_val = true;
-            
-            // Could potentially track how many instructions were linked using the WIBStats class
 
-
-            /* Note: These checks were intentially left out since they were already run in the issue queue.
-                The only reason that they would be in this function is in the case that the Issue Queue determined that
-                it is a long running instruction. So, unlike the Issue Queue counterpart, this function operates under 
-                the assumption that the instruction will not become ready in flight between stages. Additionally, we want
-                to link the link the instructions using the physical register, regardless of whether it is a fixed mapping*/
-
-            // Check the IQ's scoreboard to make sure the register
-            // hasn't become ready while the instruction was in flight
-            // between stages.  Only if it really isn't ready should
-            // it be added to the dependency graph.
-            // if (src_reg->isFixedMapping()) {
-            //     continue;               
-            // } else if (!regScoreboard[src_reg->flatIndex()]) {
-            //     DPRINTF(IQ, "Instruction PC %s has src reg %i (%s) that "
-            //             "is being added to the dependency chain.\n",
-            //             new_inst->pcState(), src_reg->index(),
-            //             src_reg->className());
-
-            //     dependGraph.insert(src_reg->flatIndex(), new_inst);
-
-            //     // Change the return value to indicate that something
-            //     // was added to the dependency graph.
-            //     return_val = true;
-            // } else {
-            //     DPRINTF(IQ, "Instruction PC %s has src reg %i (%s) that "
-            //             "became ready before it reached the IQ.\n",
-            //             new_inst->pcState(), src_reg->index(),
-            //             src_reg->className());
-            //     // Mark a register ready within the instruction.
-            //     new_inst->markSrcRegReady(src_reg_idx);
-            // }
         }
     }
 
@@ -321,11 +337,15 @@ WIB::onLoadComplete(RegIndex preg)
         instsToExecute.pop_front();
         DPRINTF(WIB, "reinsert candidate: sn=%llu (reg %d)\n",
                 inst->seqNum, preg);
+        
         // Real reinsertion will happen via IEW hook once Dalen's dep graph is wired.
+        instQueue.insert(inst);
     } else {
         DPRINTF(WIB, "no waiters for reg %d (stub)\n", preg);
     }
 }
+
+
 
 } // namespace o3
 } // namespace gem5

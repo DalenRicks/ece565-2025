@@ -55,6 +55,9 @@ class WIB
 
     /** Adds instructions to WIB */
     void insertInWIB(const DynInstPtr &new_inst);
+
+    /** Removes instructions to WIB */
+    void removeFromWIB(const DynInstPtr &new_inst);
     
     /** Adds instructions to Issue Queue */
     void addInstsToIQ(const DynInstPtr &ready_inst);
