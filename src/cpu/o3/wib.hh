@@ -17,7 +17,6 @@
 #include "cpu/o3/comm.hh"
 #include "cpu/o3/dep_graph.hh"
 #include "cpu/o3/dyn_inst_ptr.hh"
-#include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/limits.hh"
 #include "cpu/o3/lsq.hh"
 #include "cpu/o3/mem_dep_unit.hh"
@@ -35,12 +34,13 @@ namespace o3
 class FUPool;
 class CPU;
 class IEW;
+class InstructionQueue;
 
 class WIB
 {
   public:
     /** Constructs a WIB. */
-    WIB(CPU *cpu_ptr, IEW *iew_ptr,
+    WIB(CPU *cpu_ptr, IEW *iew_ptr, InstructionQueue *iq_ptr,
         const BaseO3CPUParams &params);
 
 
@@ -53,14 +53,20 @@ class WIB
     /** Registers probes. */
     void regProbePoints();
 
-    /** Removes instructions from Issue Queue */
-    void removeInstsFromIQ(const DynInstPtr &waiting_inst);
+    /** Adds instructions to WIB */
+    void insertInWIB(const DynInstPtr &new_inst);
     
     /** Adds instructions to Issue Queue */
     void addInstsToIQ(const DynInstPtr &ready_inst);
 
     /** Wakes all dependents of a completed instruction. */
     int wakeDependents(const DynInstPtr &completed_inst);
+    
+    /** Adds a dependency between a normal instruction and a long instruction in the dependency graph. */
+    bool addLongDependency(const DynInstPtr &new_inst);
+
+    /** Adds a long instruction as a producer in the dependency graph. */
+    void addLongProducer(const DynInstPtr &long_inst);
 
     // load finished; time to nudge any waiters tied to this phys reg
     void onLoadComplete(RegIndex preg);
@@ -70,13 +76,14 @@ class WIB
     CPU *cpu;
 
     /** Instruction queue. */
-    InstructionQueue instQueue;
+    InstructionQueue *instQueue;  // Not 100% sure this is necessary yet but being proactive
 
     /** Load / store queue. */
     LSQ ldstQueue;
 
     /** To probe when instruction execution is complete. */
     ProbePointArg<DynInstPtr> *ppToCommit;
+    
 
     //////////////////////////////////////
     // Instruction lists, ready queues, and ordering
@@ -97,6 +104,9 @@ class WIB
     // Various parameters
     //////////////////////////////////////
 
+    /** Number of free IQ entries left. */
+    unsigned freeEntries;
+
     /** The number of entries in the instruction queue. */
     unsigned numEntries;
 
@@ -108,6 +118,11 @@ class WIB
 
     DependencyGraph<DynInstPtr> dependGraph;
 
+    /** Debugging function to count how many entries are in the IQ.  It does
+     *  a linear walk through the instructions, so do not call this function
+     *  during normal execution.
+     */
+    int countInsts();
 
     struct WIBStats : public statistics::Group
     {

@@ -48,6 +48,7 @@
 #include "cpu/o3/dyn_inst.hh"
 #include "cpu/o3/fu_pool.hh"
 #include "cpu/o3/limits.hh"
+#include "cpu/o3/wib.hh"
 #include "debug/IQ.hh"
 #include "enums/OpClass.hh"
 #include "params/BaseO3CPU.hh"
@@ -88,6 +89,7 @@ InstructionQueue::InstructionQueue(CPU *cpu_ptr, IEW *iew_ptr,
         const BaseO3CPUParams &params)
     : cpu(cpu_ptr),
       iewStage(iew_ptr),
+      wib(cpu_ptr, iew_ptr, this, params),
       fuPool(params.fuPool),
       iqPolicy(params.smtIQPolicy),
       numThreads(params.numThreads),
@@ -675,13 +677,54 @@ InstructionQueue::getInstToExecute()
     return inst;
 }
 
-DynInstPtr
-InstructionQueue::getInstToWIB()
+void
+InstructionQueue::moveDependentsToWIB(const DynInstPtr &long_inst)
 {
-    assert(!instsToWIB.empty());
-    DynInstPtr inst = std::move(instsToWIB.front());
-    instsToWIB.pop_front();
-    return inst;
+    int dependents = 0;
+    
+    for (int dest_reg_idx = 0;
+         dest_reg_idx < long_inst->numDestRegs();
+         dest_reg_idx++)
+    {
+        PhysRegIdPtr dest_reg =
+            long_inst->renamedDestIdx(dest_reg_idx);
+
+        // Special case of uniq or control registers.  They are not
+        // handled by the IQ and thus have no dependency graph entry.
+        if (dest_reg->isFixedMapping()) {
+            DPRINTF(IQ, "Reg %d [%s] is part of a fix mapping, skipping\n",
+                    dest_reg->index(), dest_reg->className());
+            continue;
+        }
+
+        DPRINTF(IQ, "Moving any dependents on register %i (%s).\n",
+                dest_reg->index(),
+                dest_reg->className());
+
+        //Go through the dependency chain, marking the registers as
+        //in WIB within the waiting instructions.
+        DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
+        
+        while (dep_inst) {
+            DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
+                    "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
+
+            // Mark the instruciton as in the WIB (not needed since its done in WIB)
+            dep_inst->setWaiting();
+            
+            // Move to WIB
+            wib.insertInWIB(dep_inst);
+
+            dep_inst = dependGraph.pop(dest_reg->flatIndex());
+
+            ++dependents;
+        }
+
+        // Reset the head node now that all of its dependents have
+        // been moved.
+        assert(dependGraph.empty(dest_reg->flatIndex()));
+        dependGraph.clearInst(dest_reg->flatIndex());
+    }
 }
 
 void
@@ -791,6 +834,8 @@ InstructionQueue::scheduleReadyInsts()
     ListOrderIt order_it = listOrder.begin();
     ListOrderIt order_end_it = listOrder.end();
 
+    // TODO: Figure out what listOrder is
+
     while (total_issued < totalWidth && order_it != order_end_it) {
         OpClass op_class = (*order_it).queueType;
 
@@ -844,6 +889,10 @@ InstructionQueue::scheduleReadyInsts()
         }
 
         // Check if the instruction is marked to move to the WIB
+        /* Note:
+            I believe this will only work if the WIB-bound instructions are placed in the 
+            readyInsts list
+        */
         if (issuing_inst->waitToIssue()) {
             // Remove from ready queue
             readyInsts[op_class].pop();
@@ -1074,7 +1123,10 @@ InstructionQueue::wakeDependents(const DynInstPtr &completed_inst)
         //Go through the dependency chain, marking the registers as
         //ready within the waiting instructions.
         DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
+        
 
+        /* Note: Look here for inspiration for linking and interacting with
+        dependency graph instructions and the dependency chain*/
         while (dep_inst) {
             DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
                     "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
@@ -1130,12 +1182,23 @@ InstructionQueue::rescheduleMemInst(const DynInstPtr &resched_inst)
 {
     DPRINTF(IQ, "Rescheduling mem inst [sn:%llu]\n", resched_inst->seqNum);
 
+    /* Note:
+        I had identified that line 1554 in LSQUnit might be a good place to trigger load
+        to be moved to the WIB.
+        
+        When LSQUnit calls rescheduleMemInst, it is actually calling IEW::rescheduleMemInst,
+        which just calls this function. So ideally, if the WIB lives in the IQ, this would
+        be a great place to get the dependency chain and move all the instructions to the WIB*/
+
     // Reset DTB translation state
     resched_inst->translationStarted(false);
     resched_inst->translationCompleted(false);
 
     resched_inst->clearCanIssue();
     memDepUnit[resched_inst->threadNumber].reschedule(resched_inst);
+
+    // After reschedule, we will look for all dependent instructions and evict them to the WIB
+    moveDependentsToWIB(resched_inst);
 }
 
 void
@@ -1385,6 +1448,8 @@ InstructionQueue::addToDependents(const DynInstPtr &new_inst)
         // Only add it to the dependency graph if it's not ready.
         if (!new_inst->readySrcIdx(src_reg_idx)) {
             PhysRegIdPtr src_reg = new_inst->renamedSrcIdx(src_reg_idx);
+            
+            /* Also look here for how dependency graph stuff*/
 
             // Check the IQ's scoreboard to make sure the register
             // hasn't become ready while the instruction was in flight
@@ -1426,6 +1491,8 @@ InstructionQueue::addToProducers(const DynInstPtr &new_inst)
     // the dependency links.
     int8_t total_dest_regs = new_inst->numDestRegs();
 
+
+    // And look here for dependency graph stuff
     for (int dest_reg_idx = 0;
          dest_reg_idx < total_dest_regs;
          dest_reg_idx++)
@@ -1489,28 +1556,6 @@ InstructionQueue::addIfReady(const DynInstPtr &inst)
             addToOrderList(op_class);
         }
     }
-
-    /** alternative option to adding instructions to the WIB queue */
-    // if (inst->waitToIssue()){
-    //     OpClass op_class = inst->opClass();
-
-    //     DPRINTF(IQ, "Instruction is dependent on a load miss, putting"
-    //             "it into the WIB, PC %s opclass:%i [sn:%llu].\n",
-    //             inst->pcState(), op_class, inst->seqNum);
-
-    //     instsToWIB[op_class].push(inst);
-
-    //     // Will need to reorder the list if either a queue is not on the list,
-    //     // or it has an older instruction than last time.
-    //     if (!queueOnList[op_class]) {
-    //         addToOrderList(op_class);
-    //     } else if (instsToWIB[op_class].top()->seqNum  <
-    //                (*readyIt[op_class]).oldestInst) {
-    //         listOrder.erase(readyIt[op_class]);
-    //         addToOrderList(op_class);
-    //     }
-
-    // }
 }
 
 int
