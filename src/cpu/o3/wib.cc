@@ -339,7 +339,7 @@ WIB::onLoadComplete(RegIndex preg)
                 inst->seqNum, preg);
         
         // Real reinsertion will happen via IEW hook once Dalen's dep graph is wired.
-        instQueue.insert(inst);
+        removeFromWIB(inst);
     } else {
         DPRINTF(WIB, "no waiters for reg %d (stub)\n", preg);
     }
