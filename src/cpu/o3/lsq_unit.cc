@@ -1127,6 +1127,13 @@ LSQUnit::writeback(const DynInstPtr &inst, PacketPtr pkt)
     // Need to insert instruction into queue to commit
     iewStage->instToCommit(inst);
 
+    // Check for WIB dependents
+    iewStage->checkWIBForDependents(inst);
+
+    // Potentially the command to move dependent insts from WIB to IQ should be called here since
+    // the LSQ only applies to loads or stores. Potenttially need to filter out stores since the 
+    // WIB was designed to handle load cache misses
+
     iewStage->activityThisCycle();
 
     // see if this load changed the PC

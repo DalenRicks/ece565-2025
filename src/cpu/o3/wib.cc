@@ -28,10 +28,10 @@ WIB::WIB(CPU *cpu_ptr, IEW *iew_ptr, InstructionQueue *iq_ptr,
     const BaseO3CPUParams &params)
     : cpu(cpu_ptr),
       instQueue(iq_ptr),
-      ldstQueue(cpu_ptr, iew_ptr, params),
+    //   ldstQueue(cpu_ptr, iew_ptr, params),   // Will cause error and prevent code from running
 	  numEntries(params.numWIBEntries),
-      totalWidth(params.issueWidth),
-      wibStats(cpu, totalWidth)
+      totalWidth(params.issueWidth)
+    //   wibStats(cpu, totalWidth)
 {
     const auto &reg_classes = params.isa[0]->regClasses();
     // Set the number of total physical registers
@@ -49,14 +49,14 @@ WIB::WIB(CPU *cpu_ptr, IEW *iew_ptr, InstructionQueue *iq_ptr,
     dependGraph.resize(numPhysRegs);
 }
 
-WIB::WIBStats::WIBStats(CPU *cpu, const unsigned &total_width)
-    : statistics::Group(cpu),
-    ADD_STAT(instsAdded, statistics::units::Count::get(),
-             "Number of instructions added to the WIB")
-{
-    instsAdded
-        .prereq(instsAdded);
-}
+// WIB::WIBStats::WIBStats(CPU *cpu, const unsigned &total_width)
+//     : statistics::Group(cpu),
+//     ADD_STAT(instsAddedToWIB, statistics::units::Count::get(),
+//              "Number of instructions added to the WIB")
+// {
+//     instsAddedToWIB
+//         .prereq(instsAddedToWIB);
+// }
 
 WIB::~WIB()
 {
@@ -113,10 +113,10 @@ void WIB::insertInWIB(const DynInstPtr &new_inst)
     //     addIfReady(new_inst);
     // }
 
-    ++wibStats.instsAdded;
+    // ++wibStats.instsAddedToWIB;
     
     // For tracking the number of instructions per thread. Might be helpful
-    // count[new_inst->threadNumber]++;
+    count[new_inst->threadNumber]++;
 
     assert(freeEntries == (numEntries - countInsts()));
 }
@@ -124,10 +124,10 @@ void WIB::insertInWIB(const DynInstPtr &new_inst)
 void
 WIB::removeFromWIB(const DynInstPtr &long_inst)
 {
-    int dependents = 0;
-
     assert(!long_inst->isSquashed());
     
+    ThreadID tid = long_inst->threadNumber;
+
     for (int dest_reg_idx = 0;
          dest_reg_idx < long_inst->numDestRegs();
          dest_reg_idx++)
@@ -160,7 +160,8 @@ WIB::removeFromWIB(const DynInstPtr &long_inst)
 
             dep_inst = dependGraph.pop(dest_reg->flatIndex());
 
-            ++dependents;
+            ++freeEntries;
+            count[tid]--;
         }
 
         // Reset the head node now that all of its dependents have
@@ -171,73 +172,114 @@ WIB::removeFromWIB(const DynInstPtr &long_inst)
 }
 
 
-int WIB::wakeDependents(const DynInstPtr &completed_inst)
+void
+WIB::doSquash(ThreadID tid)
 {
-    int dependents = 0;
+    // Start at the tail.
+    ListIt squash_it = instList[tid].end();
+    --squash_it;
 
-    completed_inst->lastWakeDependents = curTick();
+    // DPRINTF(IQ, "[tid:%i] Squashing until sequence number %i!\n",
+    //         tid, squashedSeqNum[tid]);
 
-    // DPRINTF(IQ, "Waking dependents of completed instruction.\n");
+    // Squash any instructions younger than the squashed sequence number
+    // given.
+    while (squash_it != instList[tid].end() &&
+           (*squash_it)->seqNum > squashedSeqNum[tid]) {
 
-    assert(!completed_inst->isSquashed());
+        DynInstPtr squashed_inst = (*squash_it);
 
-    for (int dest_reg_idx = 0;
-         dest_reg_idx < completed_inst->numDestRegs();
-         dest_reg_idx++)
-    {
-        PhysRegIdPtr dest_reg =
-            completed_inst->renamedDestIdx(dest_reg_idx);
-
-        // Special case of uniq or control registers.  They are not
-        // handled by the IQ and thus have no dependency graph entry.
-        if (dest_reg->isFixedMapping()) {
-            // DPRINTF(IQ, "Reg %d [%s] is part of a fix mapping, skipping\n",
-            //         dest_reg->index(), dest_reg->className());
+        // Only handle the instruction if it actually is in the IQ and
+        // hasn't already been squashed in the IQ.
+        if (squashed_inst->threadNumber != tid ||
+            squashed_inst->isSquashedInIQ()) {
+            --squash_it;
             continue;
         }
 
-        // Avoid waking up dependents if the register is pinned
-        dest_reg->decrNumPinnedWritesToComplete();
-        if (dest_reg->isPinned())
-            completed_inst->setPinnedRegsWritten();
+        if (!squashed_inst->isIssued() ||
+            (squashed_inst->isMemRef() &&
+             !squashed_inst->memOpDone())) {
 
-        if (dest_reg->getNumPinnedWritesToComplete() != 0) {
-            // DPRINTF(IQ, "Reg %d [%s] is pinned, skipping\n",
-            //         dest_reg->index(), dest_reg->className());
-            continue;
+            // DPRINTF(IQ, "[tid:%i] Instruction [sn:%llu] PC %s squashed.\n",
+            //         tid, squashed_inst->seqNum, squashed_inst->pcState());
+
+            bool is_acq_rel = squashed_inst->isFullMemBarrier() &&
+                         (squashed_inst->isLoad() ||
+                          (squashed_inst->isStore() &&
+                             !squashed_inst->isStoreConditional()));
+
+            // Remove the instruction from the dependency list.
+            if (is_acq_rel ||
+                (!squashed_inst->isNonSpeculative() &&
+                 !squashed_inst->isStoreConditional() &&
+                 !squashed_inst->isAtomic() &&
+                 !squashed_inst->isReadBarrier() &&
+                 !squashed_inst->isWriteBarrier())) {
+
+                for (int src_reg_idx = 0;
+                     src_reg_idx < squashed_inst->numSrcRegs();
+                     src_reg_idx++)
+                {
+                    PhysRegIdPtr src_reg =
+                        squashed_inst->renamedSrcIdx(src_reg_idx);
+
+                    // Only remove it from the dependency graph if it
+                    // was placed there in the first place.
+
+                    // Instead of doing a linked list traversal, we
+                    // can just remove these squashed instructions
+                    // either at issue time, or when the register is
+                    // overwritten.  The only downside to this is it
+                    // leaves more room for error.
+
+                    if (!squashed_inst->readySrcIdx(src_reg_idx) &&
+                        !src_reg->isFixedMapping()) {
+                        dependGraph.remove(src_reg->flatIndex(),
+                                           squashed_inst);
+                    }
+                }
+
+            }
+
+            // Might want to also clear out the head of the dependency graph.
+
+            // Mark it as squashed within the IQ.
+            squashed_inst->setSquashedInIQ();
+
+            // @todo: Remove this hack where several statuses are set so the
+            // inst will flow through the rest of the pipeline.
+            squashed_inst->setIssued();
+            squashed_inst->setCanCommit();
+            squashed_inst->clearInIQ();
+
+            //Update Thread IQ Count
+            count[squashed_inst->threadNumber]--;
+
+            ++freeEntries;
         }
 
-        // DPRINTF(IQ, "Waking any dependents on register %i (%s).\n",
-        //         dest_reg->index(),
-        //         dest_reg->className());
-
-        //Go through the dependency chain, marking the registers as
-        //ready within the waiting instructions.
-        DynInstPtr dep_inst = dependGraph.pop(dest_reg->flatIndex());
-
-        while (dep_inst) {
-            // DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
-            //         "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
-
-            // Might want to give more information to the instruction
-            // so that it knows which of its source registers is
-            // ready.  However that would mean that the dependency
-            // graph entries would need to hold the src_reg_idx.
-            dep_inst->markSrcRegReady();
-
-            // addIfReady(dep_inst);
-
-            dep_inst = dependGraph.pop(dest_reg->flatIndex());
-
-            ++dependents;
+        // IQ clears out the heads of the dependency graph only when
+        // instructions reach writeback stage. If an instruction is squashed
+        // before writeback stage, its head of dependency graph would not be
+        // cleared out; it holds the instruction's DynInstPtr. This
+        // prevents freeing the squashed instruction's DynInst.
+        // Thus, we need to manually clear out the squashed instructions'
+        // heads of dependency graph.
+        for (int dest_reg_idx = 0;
+             dest_reg_idx < squashed_inst->numDestRegs();
+             dest_reg_idx++)
+        {
+            PhysRegIdPtr dest_reg =
+                squashed_inst->renamedDestIdx(dest_reg_idx);
+            if (dest_reg->isFixedMapping()){
+                continue;
+            }
+            assert(dependGraph.empty(dest_reg->flatIndex()));
+            dependGraph.clearInst(dest_reg->flatIndex());
         }
-
-        // Reset the head node now that all of its dependents have
-        // been woken up.
-        assert(dependGraph.empty(dest_reg->flatIndex()));
-        dependGraph.clearInst(dest_reg->flatIndex());
+        instList[tid].erase(squash_it--);
     }
-    return dependents;
 }
 
 /*  When we move dependency chains from the issue queue to the wib, we dont necesarially care

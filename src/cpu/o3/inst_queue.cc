@@ -455,7 +455,6 @@ InstructionQueue::isDrained() const
 {
     bool drained = dependGraph.empty() &&
                    instsToExecute.empty() &&
-                   instsToWIB.empty() &&
                    wbOutstanding == 0;
     for (ThreadID tid = 0; tid < numThreads; ++tid)
         drained = drained && memDepUnit[tid].isDrained();
@@ -468,7 +467,6 @@ InstructionQueue::drainSanityCheck() const
 {
     assert(dependGraph.empty());
     assert(instsToExecute.empty());
-    assert(instsToWIB.empty());
     for (ThreadID tid = 0; tid < numThreads; ++tid)
         memDepUnit[tid].drainSanityCheck();
 }
@@ -899,37 +897,6 @@ InstructionQueue::scheduleReadyInsts()
             }
         }
 
-        // Check if the instruction is marked to move to the WIB
-        /* Note:
-            I believe this will only work if the WIB-bound instructions are placed in the 
-            readyInsts list
-        */
-        if (issuing_inst->waitToIssue()) {
-            // Remove from ready queue
-            readyInsts[op_class].pop();
-
-            if (!readyInsts[op_class].empty()) {
-                moveToYoungerInst(order_it);
-            } else {
-                readyIt[op_class] = listOrder.end();
-                queueOnList[op_class] = false;
-            }
-
-            listOrder.erase(order_it++);
-
-            // Add to the instsToWIB queue
-            instsToWIB.push_back(issuing_inst);
-
-            DPRINTF(IQ, "Thread %i: Moving instruction PC %s "
-                    "[sn:%llu] to WIB\n",
-                    tid, issuing_inst->pcState(),
-                    issuing_inst->seqNum);
-
-            issuing_inst->setWaiting();
-            ++total_issued;
-        
-        }
-
         // If we have an instruction that doesn't require a FU, or a
         // valid FU, then schedule for execution.
         if (idx != FUPool::NoFreeFU) {
@@ -1290,6 +1257,7 @@ InstructionQueue::squash(ThreadID tid)
     squashedSeqNum[tid] = fromCommit->commitInfo[tid].doneSeqNum;
 
     doSquash(tid);
+    wib.doSquash(tid);
 
     // Also tell the memory dependence unit to squash.
     memDepUnit[tid].squash(squashedSeqNum[tid], tid);

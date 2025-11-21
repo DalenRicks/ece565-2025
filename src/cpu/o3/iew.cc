@@ -565,6 +565,12 @@ IEW::cacheUnblocked()
 }
 
 void
+IEW::checkWIBForDependents(const DynInstPtr &inst)
+{
+    instQueue.checkWIBForDependents(inst);
+}
+
+void
 IEW::instToCommit(const DynInstPtr& inst)
 {
     // This function should not be called after writebackInsts in a
@@ -1428,10 +1434,6 @@ IEW::writebackInsts()
         // Notify potential listeners that execution is complete for this
         // instruction.
         ppToCommit->notify(inst);
-        
-
-        instQueue.checkWIBForDependents(inst);
-        /** Figure how how to hook into this notify signal OR directly call the WIB::wakeDependents() function */
 
         // Some instructions will be sent to commit without having
         // executed because they need commit to handle them.

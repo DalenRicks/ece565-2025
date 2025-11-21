@@ -74,6 +74,12 @@ class WIB
     // load finished; time to nudge any waiters tied to this phys reg
     void onLoadComplete(RegIndex preg);
 
+    /** Does the actual squashing. */
+    void doSquash(ThreadID tid);
+
+    // Typedef of iterator through the list of instructions.
+    typedef typename std::list<DynInstPtr>::iterator ListIt;
+
   private:
     /** Pointer to the CPU. */
     CPU *cpu;
@@ -82,7 +88,7 @@ class WIB
     InstructionQueue *instQueue;  // Not 100% sure this is necessary yet but being proactive
 
     /** Load / store queue. */
-    LSQ ldstQueue;
+    // LSQ ldstQueue;
 
     /** To probe when instruction execution is complete. */
     ProbePointArg<DynInstPtr> *ppToCommit;
@@ -107,6 +113,9 @@ class WIB
     // Various parameters
     //////////////////////////////////////
 
+    /** Per Thread IQ count */
+    unsigned count[MaxThreads];
+
     /** Number of free IQ entries left. */
     unsigned freeEntries;
 
@@ -119,6 +128,9 @@ class WIB
     /** The number of physical registers in the CPU. */
     unsigned numPhysRegs;
 
+    /** The sequence number of the squashed instruction. */
+    InstSeqNum squashedSeqNum[MaxThreads];
+
     DependencyGraph<DynInstPtr> dependGraph;
 
     /** Debugging function to count how many entries are in the IQ.  It does
@@ -127,14 +139,14 @@ class WIB
      */
     int countInsts();
 
-    struct WIBStats : public statistics::Group
-    {
-        WIBStats(CPU *cpu, const unsigned &total_width);
+    // struct WIBStats : public statistics::Group
+    // {
+    //     WIBStats(CPU *cpu, const unsigned &total_width);
         
-        /** Stat for number of instructions added. */
-        statistics::Scalar instsAdded;
+    //     /** Stat for number of instructions added. */
+    //     statistics::Scalar instsAddedToWIB;
 
-    } wibStats; 
+    // } wibStats; 
 };
 } // namespace o3
 } // namespace gem5

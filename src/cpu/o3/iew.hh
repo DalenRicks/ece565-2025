@@ -185,6 +185,12 @@ class IEW
     /** Notifies that the cache has become unblocked */
     void cacheUnblocked();
 
+    /** Checks if a dependency chain exists in the WIB for the input instruction.
+     * If so, it retrieves all dependents of a long instruction to the WIB 
+     * @param inst The instruction whose dependents are to be moved
+    */
+    void checkWIBForDependents(const DynInstPtr &inst);
+
     /** Sends an instruction to commit through the time buffer. */
     void instToCommit(const DynInstPtr &inst);
 
