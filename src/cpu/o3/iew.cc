@@ -831,7 +831,7 @@ void
 IEW::dispatch(ThreadID tid)
 {
     // quick WIB peek before normal dispatch
-    checkWIB(tid);
+    // checkWIB(tid);
 
     // If status is Running or idle,
     //     call dispatchInsts()
@@ -1114,31 +1114,31 @@ IEW::dispatchInsts(ThreadID tid)
     dis_num_inst = 0;
 }
 
-// WIB reinsertin hook 
-void
-IEW::checkWIB(ThreadID tid)
-{
-    int pulled = 0;
+// // WIB reinsertin hook 
+// void
+// IEW::checkWIB(ThreadID tid)
+// {
+//     int pulled = 0;
 
-    //peek at WIB for ready instructions.
-    while (wib.hasReady() && pulled < 2) {
-        auto inst = wib.popReady();
-        if (!inst)
-            break;
+//     //peek at WIB for ready instructions.
+//     while (wib.hasReady() && pulled < 2) {
+//         auto inst = wib.popReady();
+//         if (!inst)
+//             break;
 
-        DPRINTF(WIB, "[tid:%i] pulling inst from WIB: [sn:%llu]\n",
-                tid, inst->seqNum);
+//         DPRINTF(WIB, "[tid:%i] pulling inst from WIB: [sn:%llu]\n",
+//                 tid, inst->seqNum);
 
-        // Reinsert into IQ once the API is finalized.
-        // instQueue.insert(inst);
+//         // Reinsert into IQ once the API is finalized.
+//         // instQueue.insert(inst);
 
-        pulled++;
-    }
+//         pulled++;
+//     }
 
-    if (pulled)
-        DPRINTF(WIB, "[tid:%i] %d instruction(s) reinserted from WIB\n",
-                tid, pulled);
-}
+//     if (pulled)
+//         DPRINTF(WIB, "[tid:%i] %d instruction(s) reinserted from WIB\n",
+//                 tid, pulled);
+// }
 
 void
 IEW::printAvailableInsts()
@@ -1428,7 +1428,9 @@ IEW::writebackInsts()
         // Notify potential listeners that execution is complete for this
         // instruction.
         ppToCommit->notify(inst);
+        
 
+        instQueue.checkWIBForDependents(inst);
         /** Figure how how to hook into this notify signal OR directly call the WIB::wakeDependents() function */
 
         // Some instructions will be sent to commit without having

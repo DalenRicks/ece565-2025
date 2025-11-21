@@ -9,7 +9,7 @@
 #include "cpu/o3/inst_queue.hh"
 #include "cpu/o3/limits.hh"
 #include "debug/IQ.hh"      // I have a feeling that this include will cause issues later. Find out how to make a WIB version or whether it is necessary
-#include "debug/WIB.hh"   // trace for WIB flow
+// #include "debug/WIB.hh"   // trace for WIB flow
 #include "enums/OpClass.hh"
 #include "params/BaseO3CPU.hh"
 #include "sim/core.hh"
@@ -125,6 +125,8 @@ void
 WIB::removeFromWIB(const DynInstPtr &long_inst)
 {
     int dependents = 0;
+
+    assert(!long_inst->isSquashed());
     
     for (int dest_reg_idx = 0;
          dest_reg_idx < long_inst->numDestRegs();
@@ -152,9 +154,6 @@ WIB::removeFromWIB(const DynInstPtr &long_inst)
         while (dep_inst) {
             DPRINTF(IQ, "Waking up a dependent instruction, [sn:%llu] "
                     "PC %s.\n", dep_inst->seqNum, dep_inst->pcState());
-
-            // Mark the instruciton as in the WIB (not needed since its done in WIB)
-            dep_inst->setWaiting();
             
             // Move to WIB
             instQueue->insert(dep_inst);
@@ -329,19 +328,19 @@ WIB::countInsts()
 void
 WIB::onLoadComplete(RegIndex preg)
 {
-    DPRINTF(WIB, "onLoadComplete: reg %d ready\n", preg);
+    // DPRINTF(WIB, "onLoadComplete: reg %d ready\n", preg);
 
     // For now, just poke the local ready list so we can see the path light up.
     if (!instsToExecute.empty()) {
         auto inst = instsToExecute.front();
         instsToExecute.pop_front();
-        DPRINTF(WIB, "reinsert candidate: sn=%llu (reg %d)\n",
-                inst->seqNum, preg);
+        // DPRINTF(WIB, "reinsert candidate: sn=%llu (reg %d)\n",
+        //         inst->seqNum, preg);
         
         // Real reinsertion will happen via IEW hook once Dalen's dep graph is wired.
         removeFromWIB(inst);
     } else {
-        DPRINTF(WIB, "no waiters for reg %d (stub)\n", preg);
+        // DPRINTF(WIB, "no waiters for reg %d (stub)\n", preg);
     }
 }
 

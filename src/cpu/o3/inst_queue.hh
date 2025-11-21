@@ -199,9 +199,15 @@ class InstructionQueue
     DynInstPtr getInstToExecute();
 
     /** Moves all dependents of a long instruction to the WIB 
-     * @param resched_inst The instruction whose dependents are to be moved
+     * @param long_inst The instruction whose dependents are to be moved
     */
     void moveDependentsToWIB(const DynInstPtr &long_inst);
+
+    /** Checks if a dependency chain exists in the WIB for the input instruction.
+     * If so, it retrieves all dependents of a long instruction to the WIB 
+     * @param long_inst The instruction whose dependents are to be moved
+    */
+    void checkWIBForDependents(const DynInstPtr &long_inst);
 
     /** Gets a memory instruction that was referred due to a delayed DTB
      *  translation if it is now ready to execute.  NULL if none available.

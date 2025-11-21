@@ -728,6 +728,17 @@ InstructionQueue::moveDependentsToWIB(const DynInstPtr &long_inst)
 }
 
 void
+InstructionQueue::checkWIBForDependents(const DynInstPtr &long_inst)
+{
+    /**
+     * Calls function that will search the wib for the input instruction and
+     * move instructions back to the issue queue using 
+     * InstructionQueue::insert()
+     */
+    wib.removeFromWIB(long_inst);
+}
+
+void
 InstructionQueue::addToOrderList(OpClass op_class)
 {
     assert(!readyInsts[op_class].empty());
