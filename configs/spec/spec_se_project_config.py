@@ -154,9 +154,9 @@ parser.add_argument("--writeback-width", type=int, default=8,
 # Queue Size Parameters
 parser.add_argument("--rob-size", type=int, default=128,
                     help="Reorder Buffer (Active List) size (default: 128)")
-parser.add_argument("--iq-size", type=int, default=32,
+parser.add_argument("--iq-size", type=int, default=48,
                     help="Integer Issue Queue size (default: 32)")
-parser.add_argument("--fp-iq-size", type=int, default=32,
+parser.add_argument("--fp-iq-size", type=int, default=48,
                     help="Floating Point Issue Queue size (default: 32)")
 parser.add_argument("--lsq-size", type=int, default=64,
                     help="Load/Store Queue size (default: 64)")
